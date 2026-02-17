@@ -1,12 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { generateTextTarget } from './targets/textTarget';
 import { generateCircleTarget, generateHeartTarget } from './targets/shapeTarget';
 import { generateImageTarget } from './targets/imageTarget';
-
-const BASE_COLOR = [0.2, 0.78, 1.0];
-const FAST_COLOR = [1.0, 0.48, 0.3];
 
 function createRng(seed) {
   let state = seed >>> 0;
@@ -17,6 +14,42 @@ function createRng(seed) {
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+function hslToRgb(h, s, l) {
+  const hue = ((h % 360) + 360) % 360;
+  const sat = THREE.MathUtils.clamp(s / 100, 0, 1);
+  const light = THREE.MathUtils.clamp(l / 100, 0, 1);
+
+  const c = (1 - Math.abs(2 * light - 1)) * sat;
+  const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
+  const m = light - c / 2;
+
+  let r = 0;
+  let g = 0;
+  let b = 0;
+
+  if (hue < 60) {
+    r = c;
+    g = x;
+  } else if (hue < 120) {
+    r = x;
+    g = c;
+  } else if (hue < 180) {
+    g = c;
+    b = x;
+  } else if (hue < 240) {
+    g = x;
+    b = c;
+  } else if (hue < 300) {
+    r = x;
+    b = c;
+  } else {
+    r = c;
+    b = x;
+  }
+
+  return [r + m, g + m, b + m];
 }
 
 function createCloudTarget(count, spreadXY = 12, spreadZ = 4) {
@@ -119,7 +152,7 @@ function resolveTargetForMode({ mode, text, count, cache, image }) {
   return createCloudTarget(count);
 }
 
-function ParticleSystem({ count, mode, text, sim, swirlEnabled, onFps, attractUntilRef }) {
+function ParticleSystem({ count, mode, text, theme, sim, swirlEnabled, particleHue, onFps, attractUntilRef }) {
   const pointsRef = useRef(null);
   const geometryRef = useRef(null);
 
@@ -141,6 +174,16 @@ function ParticleSystem({ count, mode, text, sim, swirlEnabled, onFps, attractUn
   const fpsCountRef = useRef(0);
   const fpsTickRef = useRef(0);
 
+  const isLightTheme = theme === 'light';
+  const baseColor = useMemo(
+    () => (isLightTheme ? hslToRgb(particleHue, 95, 35) : hslToRgb(particleHue, 98, 52)),
+    [isLightTheme, particleHue],
+  );
+  const fastColor = useMemo(
+    () => (isLightTheme ? hslToRgb((particleHue + 20) % 360, 95, 48) : hslToRgb((particleHue + 12) % 360, 98, 62)),
+    [isLightTheme, particleHue],
+  );
+
   const material = useMemo(
     () =>
       new THREE.PointsMaterial({
@@ -148,7 +191,7 @@ function ParticleSystem({ count, mode, text, sim, swirlEnabled, onFps, attractUn
         transparent: true,
         opacity: 0.9,
         depthWrite: false,
-        blending: THREE.AdditiveBlending,
+        blending: THREE.NormalBlending,
         vertexColors: true,
       }),
     [],
@@ -192,8 +235,6 @@ function ParticleSystem({ count, mode, text, sim, swirlEnabled, onFps, attractUn
       velocities.set(previous.velocities.subarray(0, carryLen), 0);
       colors.set(previous.colors.subarray(0, carryLen), 0);
 
-      // Keep carried particles exactly where they are during count resize.
-      // This avoids spring pull toward stale morph targets while dragging the slider.
       for (let i = 0; i < carryCount; i += 1) {
         const j = i * 3;
         const px = positions[j];
@@ -257,17 +298,17 @@ function ParticleSystem({ count, mode, text, sim, swirlEnabled, onFps, attractUn
       toHome[j + 1] = ty;
       toHome[j + 2] = tz;
 
-      colors[j] = BASE_COLOR[0];
-      colors[j + 1] = BASE_COLOR[1];
-      colors[j + 2] = BASE_COLOR[2];
+      colors[j] = baseColor[0];
+      colors[j + 1] = baseColor[1];
+      colors[j + 2] = baseColor[2];
     }
 
     if (!previous) {
       for (let i = 0; i < count; i += 1) {
         const j = i * 3;
-        colors[j] = BASE_COLOR[0];
-        colors[j + 1] = BASE_COLOR[1];
-        colors[j + 2] = BASE_COLOR[2];
+        colors[j] = baseColor[0];
+        colors[j + 1] = baseColor[1];
+        colors[j + 2] = baseColor[2];
       }
     }
 
@@ -346,7 +387,6 @@ function ParticleSystem({ count, mode, text, sim, swirlEnabled, onFps, attractUn
     image.src = '/silhouette.png';
   }, [mode, text]);
 
-
   useFrame((state, delta) => {
     const data = dataRef.current;
     const geometryCurrent = geometryRef.current;
@@ -358,7 +398,6 @@ function ParticleSystem({ count, mode, text, sim, swirlEnabled, onFps, attractUn
     const dt = Math.min(delta, 1 / 30);
     const now = performance.now();
 
-    // pointer -> world plane (z=0) intersection without allocating frame objects
     raycasterRef.current.setFromCamera(state.pointer, state.camera);
     const hit = raycasterRef.current.ray.intersectPlane(planeRef.current, hitRef.current);
 
@@ -376,7 +415,6 @@ function ParticleSystem({ count, mode, text, sim, swirlEnabled, onFps, attractUn
     const attract = attractUntilRef.current > now;
 
     const elapsed = state.clock.elapsedTime;
-    // Ease home targets so morphs stay smooth while physics and mouse forces keep running.
     const morphProgress = Math.min(Math.max((now - morphStartRef.current) / (morphDurationRef.current * 1000), 0), 1);
     const morphEase = 1 - (1 - morphProgress) ** 3;
 
@@ -408,7 +446,6 @@ function ParticleSystem({ count, mode, text, sim, swirlEnabled, onFps, attractUn
         const d2 = dx * dx + dy * dy;
 
         if (d2 < radiusSq) {
-          // Quadratic falloff keeps force soft at the edge and strong near the cursor.
           const d = Math.sqrt(d2) + 1e-6;
           const falloff = 1 - d / radius;
           const weight = falloff * falloff;
@@ -441,9 +478,9 @@ function ParticleSystem({ count, mode, text, sim, swirlEnabled, onFps, attractUn
       positions[j + 2] = nz;
 
       const speed = Math.min(Math.sqrt(vx * vx + vy * vy + vz * vz) * 0.35, 1);
-      colors[j] = BASE_COLOR[0] + (FAST_COLOR[0] - BASE_COLOR[0]) * speed;
-      colors[j + 1] = BASE_COLOR[1] + (FAST_COLOR[1] - BASE_COLOR[1]) * speed;
-      colors[j + 2] = BASE_COLOR[2] + (FAST_COLOR[2] - BASE_COLOR[2]) * speed;
+      colors[j] = baseColor[0] + (fastColor[0] - baseColor[0]) * speed;
+      colors[j + 1] = baseColor[1] + (fastColor[1] - baseColor[1]) * speed;
+      colors[j + 2] = baseColor[2] + (fastColor[2] - baseColor[2]) * speed;
     }
 
     geometryCurrent.attributes.position.needsUpdate = true;
@@ -476,16 +513,15 @@ function ParticleSystem({ count, mode, text, sim, swirlEnabled, onFps, attractUn
   );
 }
 
-export default function ParticleScene(props) {
+export default function ParticleScene({ sceneBackground, ...props }) {
   return (
     <Canvas
       dpr={[1, 1.75]}
       camera={{ position: [0, 0, 14], fov: 50, near: 0.1, far: 100 }}
       gl={{ antialias: false, powerPreference: 'high-performance' }}
     >
-      <color attach="background" args={['#05070c']} />
+      <color attach="background" args={[sceneBackground]} />
       <ParticleSystem {...props} />
     </Canvas>
   );
 }
-

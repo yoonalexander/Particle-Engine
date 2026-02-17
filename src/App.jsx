@@ -10,6 +10,10 @@ function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
+function hueToHex(hue) {
+  return `hsl(${Math.round(hue)} 95% 62%)`;
+}
+
 export default function App() {
   const [count, setCount] = useState(12000);
   const [mode, setMode] = useState('cloud');
@@ -17,6 +21,8 @@ export default function App() {
   const [fps, setFps] = useState(0);
   const [swirlEnabled, setSwirlEnabled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(true);
+  const [particleHue, setParticleHue] = useState(195);
+  const [theme, setTheme] = useState('dark');
 
   const [sim, setSim] = useState({
     spring: 6,
@@ -27,6 +33,10 @@ export default function App() {
 
   const [imageAvailable, setImageAvailable] = useState('checking');
   const attractUntilRef = useRef(0);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
 
   useEffect(() => {
     const image = new Image();
@@ -89,9 +99,12 @@ export default function App() {
     const value = Number(event.target.value);
     setSim((current) => ({ ...current, [key]: value }));
   };
+
   const setCountValue = (event) => {
     setCount(clamp(Number(event.target.value), MIN_PARTICLES, MAX_PARTICLES));
   };
+
+  const sceneBackground = theme === 'light' ? '#eef3ff' : '#05070c';
 
   return (
     <div className="app-shell">
@@ -99,8 +112,11 @@ export default function App() {
         count={count}
         mode={mode}
         text={text}
+        theme={theme}
         sim={sim}
         swirlEnabled={swirlEnabled}
+        particleHue={particleHue}
+        sceneBackground={sceneBackground}
         onFps={(value) => setFps(value)}
         attractUntilRef={attractUntilRef}
       />
@@ -114,6 +130,15 @@ export default function App() {
           <div className="hud-row">
             <span>Mode</span>
             <strong>{mode}</strong>
+          </div>
+
+          <div className="hud-row split">
+            <button type="button" onClick={() => setTheme('dark')} disabled={theme === 'dark'}>
+              Dark
+            </button>
+            <button type="button" onClick={() => setTheme('light')} disabled={theme === 'light'}>
+              Light
+            </button>
           </div>
 
           <div className="hud-buttons">
@@ -139,6 +164,26 @@ export default function App() {
               step="500"
               value={count}
               onChange={setCountValue}
+            />
+          </label>
+
+          <label className="hud-field">
+            <span className="hue-label">
+              Particle Color: {Math.round(particleHue)}deg
+              <span
+                className="hue-swatch"
+                style={{ backgroundColor: hueToHex(particleHue) }}
+                aria-hidden="true"
+              />
+            </span>
+            <input
+              className="hue-slider"
+              type="range"
+              min="0"
+              max="360"
+              step="1"
+              value={particleHue}
+              onChange={(event) => setParticleHue(Number(event.target.value))}
             />
           </label>
 
@@ -182,6 +227,17 @@ export default function App() {
           </div>
 
           <p className="hint">Hotkeys: 1-5 modes, +/- count, [ ] radius.</p>
+          <div className="hint">
+            <strong>TODO</strong>
+            <br />
+            1. Fix image mode.
+            <br />
+            2. Maybe let users draw on a canvas and have particles copy the drawing.
+            <br />
+            3. Maybe use AI to recreate a shape/figure from text description.
+            <br />
+            4. Explore making this a portfolio background app.
+          </div>
           {imageAvailable === 'missing' && (
             <p className="hint"><code>/public/silhouette.png</code> not found. Image mode falls back to cloud.</p>
           )}
@@ -194,7 +250,7 @@ export default function App() {
           aria-label={menuOpen ? 'Collapse controls menu' : 'Expand controls menu'}
           aria-expanded={menuOpen}
         >
-          {menuOpen ? '◀' : '▶'}
+          {menuOpen ? '\u25c0' : '\u25b6'}
         </button>
       </div>
     </div>
