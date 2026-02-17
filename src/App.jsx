@@ -89,6 +89,9 @@ export default function App() {
     const value = Number(event.target.value);
     setSim((current) => ({ ...current, [key]: value }));
   };
+  const setCountValue = (event) => {
+    setCount(clamp(Number(event.target.value), MIN_PARTICLES, MAX_PARTICLES));
+  };
 
   return (
     <div className="app-shell">
@@ -109,10 +112,6 @@ export default function App() {
             <strong>{fps.toFixed(1)}</strong>
           </div>
           <div className="hud-row">
-            <span>Particles</span>
-            <strong>{count}</strong>
-          </div>
-          <div className="hud-row">
             <span>Mode</span>
             <strong>{mode}</strong>
           </div>
@@ -131,20 +130,17 @@ export default function App() {
             </button>
           </div>
 
-          <div className="hud-row split">
-            <button
-              type="button"
-              onClick={() => setCount((value) => clamp(value - 1000, MIN_PARTICLES, MAX_PARTICLES))}
-            >
-              - Count
-            </button>
-            <button
-              type="button"
-              onClick={() => setCount((value) => clamp(value + 1000, MIN_PARTICLES, MAX_PARTICLES))}
-            >
-              + Count
-            </button>
-          </div>
+          <label className="hud-field">
+            <span>Particle Count: {count}</span>
+            <input
+              type="range"
+              min={MIN_PARTICLES}
+              max={MAX_PARTICLES}
+              step="500"
+              value={count}
+              onChange={setCountValue}
+            />
+          </label>
 
           <label className="hud-field">
             <span>Text</span>

@@ -50,6 +50,75 @@ function createPermutation(count, seed) {
   return perm;
 }
 
+function resolveTargetForMode({ mode, text, count, cache, image }) {
+  if (mode === 'cloud') {
+    const key = 'cloud';
+    if (!cache.has(key)) {
+      cache.set(key, createCloudTarget(count));
+    }
+    return cache.get(key);
+  }
+
+  if (mode === 'text') {
+    const key = `text:${text}`;
+    if (!cache.has(key)) {
+      cache.set(
+        key,
+        generateTextTarget({
+          text,
+          count,
+          font: '900 230px system-ui, sans-serif',
+          stride: 3,
+          worldScale: 8,
+        }),
+      );
+    }
+    return cache.get(key);
+  }
+
+  if (mode === 'circle') {
+    const key = 'circle';
+    if (!cache.has(key)) {
+      cache.set(key, generateCircleTarget({ count, radius: 4.2, filled: true }));
+    }
+    return cache.get(key);
+  }
+
+  if (mode === 'heart') {
+    const key = 'heart';
+    if (!cache.has(key)) {
+      cache.set(key, generateHeartTarget({ count, scale: 0.3, filled: true }));
+    }
+    return cache.get(key);
+  }
+
+  if (mode === 'image') {
+    if (!image) {
+      return createCloudTarget(count);
+    }
+
+    const key = 'image';
+    if (!cache.has(key)) {
+      const imageTarget = generateImageTarget({
+        image,
+        count,
+        stride: 3,
+        alphaThreshold: 20,
+        worldScale: 8,
+      });
+
+      if (imageTarget) {
+        cache.set(key, imageTarget);
+      } else {
+        return createCloudTarget(count);
+      }
+    }
+    return cache.get(key);
+  }
+
+  return createCloudTarget(count);
+}
+
 function ParticleSystem({ count, mode, text, sim, swirlEnabled, onFps, attractUntilRef }) {
   const pointsRef = useRef(null);
   const geometryRef = useRef(null);
@@ -96,6 +165,10 @@ function ParticleSystem({ count, mode, text, sim, swirlEnabled, onFps, attractUn
   }, [geometry, material]);
 
   useEffect(() => {
+    const previous = dataRef.current;
+    const previousCount = previous ? previous.positions.length / 3 : 0;
+    const carryCount = Math.min(previousCount, count);
+
     const positions = new Float32Array(count * 3);
     const velocities = new Float32Array(count * 3);
     const home = new Float32Array(count * 3);
@@ -104,100 +177,115 @@ function ParticleSystem({ count, mode, text, sim, swirlEnabled, onFps, attractUn
     const colors = new Float32Array(count * 3);
     const perm = createPermutation(count, 1337 + count);
 
-    const cloud = createCloudTarget(count);
-    positions.set(cloud);
-    home.set(cloud);
-    fromHome.set(cloud);
-    toHome.set(cloud);
+    targetCacheRef.current = new Map();
+    const initialTarget = resolveTargetForMode({
+      mode,
+      text,
+      count,
+      cache: targetCacheRef.current,
+      image: imageRef.current,
+    });
 
-    for (let i = 0; i < count; i += 1) {
+    if (previous && carryCount > 0) {
+      const carryLen = carryCount * 3;
+      positions.set(previous.positions.subarray(0, carryLen), 0);
+      velocities.set(previous.velocities.subarray(0, carryLen), 0);
+      colors.set(previous.colors.subarray(0, carryLen), 0);
+
+      // Keep carried particles exactly where they are during count resize.
+      // This avoids spring pull toward stale morph targets while dragging the slider.
+      for (let i = 0; i < carryCount; i += 1) {
+        const j = i * 3;
+        const px = positions[j];
+        const py = positions[j + 1];
+        const pz = positions[j + 2];
+        home[j] = px;
+        home[j + 1] = py;
+        home[j + 2] = pz;
+        fromHome[j] = px;
+        fromHome[j + 1] = py;
+        fromHome[j + 2] = pz;
+        toHome[j] = px;
+        toHome[j + 1] = py;
+        toHome[j + 2] = pz;
+      }
+
+      const prevPermCount = Math.min(previous.perm.length, carryCount);
+      if (prevPermCount > 0) {
+        const used = new Uint8Array(count);
+        for (let i = 0; i < prevPermCount; i += 1) {
+          let p = previous.perm[i];
+          if (p < 0 || p >= count || used[p]) {
+            p = i;
+          }
+          perm[i] = p;
+          used[p] = 1;
+        }
+
+        let next = 0;
+        for (let i = prevPermCount; i < count; i += 1) {
+          while (next < count && used[next]) {
+            next += 1;
+          }
+          const p = next < count ? next : i;
+          perm[i] = p;
+          if (p < count) {
+            used[p] = 1;
+          }
+        }
+      }
+    }
+
+    for (let i = carryCount; i < count; i += 1) {
       const j = i * 3;
+      const src = perm[i] * 3;
+      const tx = initialTarget[src];
+      const ty = initialTarget[src + 1];
+      const tz = initialTarget[src + 2];
+
+      positions[j] = tx + (Math.random() - 0.5) * 0.02;
+      positions[j + 1] = ty + (Math.random() - 0.5) * 0.02;
+      positions[j + 2] = tz + (Math.random() - 0.5) * 0.02;
+
+      home[j] = tx;
+      home[j + 1] = ty;
+      home[j + 2] = tz;
+      fromHome[j] = tx;
+      fromHome[j + 1] = ty;
+      fromHome[j + 2] = tz;
+      toHome[j] = tx;
+      toHome[j + 1] = ty;
+      toHome[j + 2] = tz;
+
       colors[j] = BASE_COLOR[0];
       colors[j + 1] = BASE_COLOR[1];
       colors[j + 2] = BASE_COLOR[2];
+    }
 
-      positions[j] += (Math.random() - 0.5) * 0.02;
-      positions[j + 1] += (Math.random() - 0.5) * 0.02;
-      positions[j + 2] += (Math.random() - 0.5) * 0.02;
+    if (!previous) {
+      for (let i = 0; i < count; i += 1) {
+        const j = i * 3;
+        colors[j] = BASE_COLOR[0];
+        colors[j + 1] = BASE_COLOR[1];
+        colors[j + 2] = BASE_COLOR[2];
+      }
     }
 
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
     dataRef.current = { positions, velocities, home, fromHome, toHome, colors, perm };
-    targetCacheRef.current = new Map([['cloud', cloud]]);
     morphStartRef.current = performance.now();
   }, [count, geometry]);
 
   const resolveTarget = () => {
-    const cache = targetCacheRef.current;
-
-    if (mode === 'cloud') {
-      const key = 'cloud';
-      if (!cache.has(key)) {
-        cache.set(key, createCloudTarget(count));
-      }
-      return cache.get(key);
-    }
-
-    if (mode === 'text') {
-      const key = `text:${text}`;
-      if (!cache.has(key)) {
-        cache.set(
-          key,
-          generateTextTarget({
-            text,
-            count,
-            font: '900 230px system-ui, sans-serif',
-            stride: 3,
-            worldScale: 8,
-          }),
-        );
-      }
-      return cache.get(key);
-    }
-
-    if (mode === 'circle') {
-      const key = 'circle';
-      if (!cache.has(key)) {
-        cache.set(key, generateCircleTarget({ count, radius: 4.2, filled: true }));
-      }
-      return cache.get(key);
-    }
-
-    if (mode === 'heart') {
-      const key = 'heart';
-      if (!cache.has(key)) {
-        cache.set(key, generateHeartTarget({ count, scale: 0.3, filled: true }));
-      }
-      return cache.get(key);
-    }
-
-    if (mode === 'image') {
-      if (!imageRef.current) {
-        return createCloudTarget(count);
-      }
-
-      const key = 'image';
-      if (!cache.has(key)) {
-        const imageTarget = generateImageTarget({
-          image: imageRef.current,
-          count,
-          stride: 3,
-          alphaThreshold: 20,
-          worldScale: 8,
-        });
-
-        if (imageTarget) {
-          cache.set(key, imageTarget);
-        } else {
-          return createCloudTarget(count);
-        }
-      }
-      return cache.get(key);
-    }
-
-    return createCloudTarget(count);
+    return resolveTargetForMode({
+      mode,
+      text,
+      count,
+      cache: targetCacheRef.current,
+      image: imageRef.current,
+    });
   };
 
   const applyMorphTarget = () => {
@@ -256,7 +344,7 @@ function ParticleSystem({ count, mode, text, sim, swirlEnabled, onFps, attractUn
     };
 
     image.src = '/silhouette.png';
-  }, [mode, text, count]);
+  }, [mode, text]);
 
 
   useFrame((state, delta) => {
