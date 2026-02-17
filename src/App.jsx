@@ -16,6 +16,7 @@ export default function App() {
   const [text, setText] = useState('CRAVEAI');
   const [fps, setFps] = useState(0);
   const [swirlEnabled, setSwirlEnabled] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(true);
 
   const [sim, setSim] = useState({
     spring: 6,
@@ -101,92 +102,104 @@ export default function App() {
         attractUntilRef={attractUntilRef}
       />
 
-      <div className="hud">
-        <div className="hud-row">
-          <span>FPS</span>
-          <strong>{fps.toFixed(1)}</strong>
+      <div className={`hud-shell ${menuOpen ? 'open' : 'collapsed'}`}>
+        <div className="hud">
+          <div className="hud-row">
+            <span>FPS</span>
+            <strong>{fps.toFixed(1)}</strong>
+          </div>
+          <div className="hud-row">
+            <span>Particles</span>
+            <strong>{count}</strong>
+          </div>
+          <div className="hud-row">
+            <span>Mode</span>
+            <strong>{mode}</strong>
+          </div>
+
+          <div className="hud-buttons">
+            <button type="button" onClick={() => setMode('cloud')}>1 Cloud</button>
+            <button type="button" onClick={() => setMode('text')}>2 Text</button>
+            <button type="button" onClick={() => setMode('circle')}>3 Circle</button>
+            <button type="button" onClick={() => setMode('heart')}>4 Heart</button>
+            <button
+              type="button"
+              disabled={imageAvailable === 'missing'}
+              onClick={() => setMode('image')}
+            >
+              5 Image
+            </button>
+          </div>
+
+          <div className="hud-row split">
+            <button
+              type="button"
+              onClick={() => setCount((value) => clamp(value - 1000, MIN_PARTICLES, MAX_PARTICLES))}
+            >
+              - Count
+            </button>
+            <button
+              type="button"
+              onClick={() => setCount((value) => clamp(value + 1000, MIN_PARTICLES, MAX_PARTICLES))}
+            >
+              + Count
+            </button>
+          </div>
+
+          <label className="hud-field">
+            <span>Text</span>
+            <input value={text} onChange={(event) => setText(event.target.value.toUpperCase())} maxLength={14} />
+          </label>
+
+          <label className="hud-field">
+            <span>Spring: {sim.spring.toFixed(2)}</span>
+            <input type="range" min="0.5" max="12" step="0.1" value={sim.spring} onChange={setSimValue('spring')} />
+          </label>
+
+          <label className="hud-field">
+            <span>Damping: {sim.damping.toFixed(3)}</span>
+            <input type="range" min="0.85" max="0.995" step="0.001" value={sim.damping} onChange={setSimValue('damping')} />
+          </label>
+
+          <label className="hud-field">
+            <span>Radius: {sim.mouseRadius.toFixed(2)} ([ ])</span>
+            <input type="range" min="0.3" max="4" step="0.05" value={sim.mouseRadius} onChange={setSimValue('mouseRadius')} />
+          </label>
+
+          <label className="hud-field">
+            <span>Mouse Force: {sim.mouseForce.toFixed(1)}</span>
+            <input type="range" min="1" max="60" step="0.5" value={sim.mouseForce} onChange={setSimValue('mouseForce')} />
+          </label>
+
+          <div className="hud-row split">
+            <button
+              type="button"
+              onClick={() => {
+                attractUntilRef.current = performance.now() + 1000;
+              }}
+            >
+              Click Attract (1s)
+            </button>
+            <button type="button" onClick={() => setSwirlEnabled((value) => !value)}>
+              Swirl: {swirlEnabled ? 'On' : 'Off'}
+            </button>
+          </div>
+
+          <p className="hint">Hotkeys: 1-5 modes, +/- count, [ ] radius.</p>
+          {imageAvailable === 'missing' && (
+            <p className="hint"><code>/public/silhouette.png</code> not found. Image mode falls back to cloud.</p>
+          )}
         </div>
-        <div className="hud-row">
-          <span>Particles</span>
-          <strong>{count}</strong>
-        </div>
-        <div className="hud-row">
-          <span>Mode</span>
-          <strong>{mode}</strong>
-        </div>
 
-        <div className="hud-buttons">
-          <button type="button" onClick={() => setMode('cloud')}>1 Cloud</button>
-          <button type="button" onClick={() => setMode('text')}>2 Text</button>
-          <button type="button" onClick={() => setMode('circle')}>3 Circle</button>
-          <button type="button" onClick={() => setMode('heart')}>4 Heart</button>
-          <button
-            type="button"
-            disabled={imageAvailable === 'missing'}
-            onClick={() => setMode('image')}
-          >
-            5 Image
-          </button>
-        </div>
-
-        <div className="hud-row split">
-          <button
-            type="button"
-            onClick={() => setCount((value) => clamp(value - 1000, MIN_PARTICLES, MAX_PARTICLES))}
-          >
-            - Count
-          </button>
-          <button
-            type="button"
-            onClick={() => setCount((value) => clamp(value + 1000, MIN_PARTICLES, MAX_PARTICLES))}
-          >
-            + Count
-          </button>
-        </div>
-
-        <label className="hud-field">
-          <span>Text</span>
-          <input value={text} onChange={(event) => setText(event.target.value.toUpperCase())} maxLength={14} />
-        </label>
-
-        <label className="hud-field">
-          <span>Spring: {sim.spring.toFixed(2)}</span>
-          <input type="range" min="0.5" max="12" step="0.1" value={sim.spring} onChange={setSimValue('spring')} />
-        </label>
-
-        <label className="hud-field">
-          <span>Damping: {sim.damping.toFixed(3)}</span>
-          <input type="range" min="0.85" max="0.995" step="0.001" value={sim.damping} onChange={setSimValue('damping')} />
-        </label>
-
-        <label className="hud-field">
-          <span>Radius: {sim.mouseRadius.toFixed(2)} ([ ])</span>
-          <input type="range" min="0.3" max="4" step="0.05" value={sim.mouseRadius} onChange={setSimValue('mouseRadius')} />
-        </label>
-
-        <label className="hud-field">
-          <span>Mouse Force: {sim.mouseForce.toFixed(1)}</span>
-          <input type="range" min="1" max="60" step="0.5" value={sim.mouseForce} onChange={setSimValue('mouseForce')} />
-        </label>
-
-        <div className="hud-row split">
-          <button
-            type="button"
-            onClick={() => {
-              attractUntilRef.current = performance.now() + 1000;
-            }}
-          >
-            Click Attract (1s)
-          </button>
-          <button type="button" onClick={() => setSwirlEnabled((value) => !value)}>
-            Swirl: {swirlEnabled ? 'On' : 'Off'}
-          </button>
-        </div>
-
-        <p className="hint">Hotkeys: 1-5 modes, +/- count, [ ] radius.</p>
-        {imageAvailable === 'missing' && (
-          <p className="hint"><code>/public/silhouette.png</code> not found. Image mode falls back to cloud.</p>
-        )}
+        <button
+          type="button"
+          className="hud-toggle"
+          onClick={() => setMenuOpen((value) => !value)}
+          aria-label={menuOpen ? 'Collapse controls menu' : 'Expand controls menu'}
+          aria-expanded={menuOpen}
+        >
+          {menuOpen ? '◀' : '▶'}
+        </button>
       </div>
     </div>
   );

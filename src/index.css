@@ -5,6 +5,9 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  --hud-width: min(320px, calc(100vw - 28px));
+  --hud-top: 14px;
+  --hud-left: 14px;
 }
 
 * {
@@ -31,11 +34,24 @@ canvas {
   position: relative;
 }
 
-.hud {
+.hud-shell {
   position: fixed;
-  top: 14px;
-  left: 14px;
-  width: min(320px, calc(100vw - 28px));
+  top: var(--hud-top);
+  left: var(--hud-left);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: transform 220ms ease;
+  transform: translateX(0);
+  z-index: 20;
+}
+
+.hud-shell.collapsed {
+  transform: translateX(calc(-1 * (var(--hud-width) + var(--hud-left) + 2px)));
+}
+
+.hud {
+  width: var(--hud-width);
   max-height: calc(100vh - 28px);
   overflow: auto;
   padding: 12px;
@@ -44,6 +60,18 @@ canvas {
   background: rgba(4, 8, 15, 0.78);
   backdrop-filter: blur(8px);
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+}
+
+.hud-toggle {
+  width: 36px;
+  height: 74px;
+  padding: 0;
+  border-radius: 0 9px 9px 0;
+  font-size: 19px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .hud-row {
@@ -130,10 +158,17 @@ input[type='range'] {
 }
 
 @media (max-width: 700px) {
+  :root {
+    --hud-width: calc(100vw - 18px);
+    --hud-top: 9px;
+    --hud-left: 9px;
+  }
+
+  .hud-shell {
+    align-items: flex-start;
+  }
+
   .hud {
-    width: calc(100vw - 18px);
-    top: 9px;
-    left: 9px;
     max-height: 50vh;
   }
 }
