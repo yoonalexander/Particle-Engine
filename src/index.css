@@ -25,6 +25,8 @@
   --input-border: rgba(150, 190, 255, 0.4);
   --input-text: #eff7ff;
   --hint: #9eb8d6;
+  --panel-bg: rgba(9, 16, 31, 0.72);
+  --draw-grid: rgba(124, 170, 255, 0.16);
 }
 
 :root[data-theme='light'] {
@@ -43,6 +45,8 @@
   --input-border: rgba(102, 149, 216, 0.5);
   --input-text: #16335c;
   --hint: #4d6f9f;
+  --panel-bg: rgba(233, 241, 255, 0.82);
+  --draw-grid: rgba(80, 116, 188, 0.14);
 }
 
 * {
@@ -119,6 +123,10 @@ canvas {
   font-size: 13px;
 }
 
+.hud-row.compact {
+  margin-bottom: 6px;
+}
+
 .hud-row strong {
   color: var(--hud-strong);
 }
@@ -150,6 +158,14 @@ canvas {
   color: var(--field-label);
 }
 
+.hud-panel {
+  margin-bottom: 12px;
+  padding: 10px;
+  border: 1px solid var(--hud-border);
+  border-radius: 9px;
+  background: var(--panel-bg);
+}
+
 .hue-label {
   display: flex;
   align-items: center;
@@ -177,12 +193,17 @@ button {
   color: inherit;
   padding: 6px 8px;
   cursor: pointer;
-  transition: background 150ms ease, border-color 150ms ease;
+  transition: background 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
 }
 
 button:hover:not(:disabled) {
   background: var(--btn-bg-hover);
   border-color: var(--btn-border-hover);
+}
+
+button.active {
+  border-color: var(--btn-border-hover);
+  box-shadow: 0 0 0 1px var(--btn-border-hover) inset;
 }
 
 button:disabled {
@@ -191,6 +212,7 @@ button:disabled {
 }
 
 input[type='text'],
+input[type='file'],
 input:not([type]) {
   width: 100%;
   border-radius: 7px;
@@ -198,6 +220,10 @@ input:not([type]) {
   background: var(--input-bg);
   color: var(--input-text);
   padding: 7px 8px;
+}
+
+input[type='file'] {
+  padding: 6px;
 }
 
 input[type='range'] {
@@ -242,6 +268,42 @@ input[type='range'] {
   cursor: pointer;
 }
 
+.draw-pad-shell {
+  display: grid;
+  gap: 10px;
+}
+
+.draw-canvas {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 296 / 168;
+  border: 1px solid var(--input-border);
+  border-radius: 10px;
+  background-color: rgba(5, 10, 20, 0.9);
+  background-image:
+    linear-gradient(var(--draw-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--draw-grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+:root[data-theme='light'] .draw-canvas {
+  background-color: rgba(255, 255, 255, 0.95);
+}
+
+.draw-canvas.erasing {
+  cursor: cell;
+}
+
+.file-field {
+  margin-bottom: 8px;
+}
+
+.source-status {
+  margin-top: 0;
+}
+
 .hint {
   margin: 6px 0 0;
   font-size: 11px;
@@ -261,6 +323,6 @@ input[type='range'] {
   }
 
   .hud {
-    max-height: 50vh;
+    max-height: 58vh;
   }
 }

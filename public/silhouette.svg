@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Sample silhouette</title>
+  <desc id="desc">A simple person silhouette for the particle image mode sample.</desc>
+  <rect width="512" height="512" fill="black" />
+  <path
+    fill="white"
+    d="M256 66c-41.97 0-76 34.03-76 76s34.03 76 76 76 76-34.03 76-76-34.03-76-76-76Zm-97.19 182.58c-33.92 15.72-58.28 47.06-64.11 83.91L78 450h108l18-108 12 170h80l12-170 18 108h108l-16.7-117.51c-5.83-36.85-30.19-68.19-64.11-83.91-27.57 19.54-61.03 31.02-97.19 31.02s-69.62-11.48-97.19-31.02Z"
+  />
+</svg>

@@ -3,7 +3,7 @@ import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { generateTextTarget } from './targets/textTarget';
 import { generateCircleTarget, generateHeartTarget } from './targets/shapeTarget';
-import { generateImageTarget } from './targets/imageTarget';
+import { generateRasterTarget } from './targets/rasterTarget';
 
 function createRng(seed) {
   let state = seed >>> 0;
@@ -83,83 +83,121 @@ function createPermutation(count, seed) {
   return perm;
 }
 
-function resolveTargetForMode({ mode, text, count, cache, image }) {
+function getCachedTarget(cache, key, factory) {
+  if (!cache.has(key)) {
+    cache.set(key, factory());
+  }
+  return cache.get(key);
+}
+
+function resolveTargetForMode({ mode, text, count, cache, rasterSources }) {
+  const cloudTarget = getCachedTarget(cache, `cloud:${count}`, () => createCloudTarget(count));
+
   if (mode === 'cloud') {
-    const key = 'cloud';
-    if (!cache.has(key)) {
-      cache.set(key, createCloudTarget(count));
-    }
-    return cache.get(key);
+    return cloudTarget;
   }
 
   if (mode === 'text') {
-    const key = `text:${text}`;
-    if (!cache.has(key)) {
-      cache.set(
-        key,
-        generateTextTarget({
-          text,
-          count,
-          font: '900 230px system-ui, sans-serif',
-          stride: 3,
-          worldScale: 8,
-        }),
-      );
-    }
-    return cache.get(key);
+    return getCachedTarget(cache, `text:${text}:${count}`, () =>
+      generateTextTarget({
+        text,
+        count,
+        font: '900 230px system-ui, sans-serif',
+        stride: 3,
+        worldScale: 8,
+      }),
+    );
   }
 
   if (mode === 'circle') {
-    const key = 'circle';
-    if (!cache.has(key)) {
-      cache.set(key, generateCircleTarget({ count, radius: 4.2, filled: true }));
-    }
-    return cache.get(key);
+    return getCachedTarget(cache, `circle:${count}`, () =>
+      generateCircleTarget({ count, radius: 4.2, filled: true }),
+    );
   }
 
   if (mode === 'heart') {
-    const key = 'heart';
-    if (!cache.has(key)) {
-      cache.set(key, generateHeartTarget({ count, scale: 0.3, filled: true }));
-    }
-    return cache.get(key);
+    return getCachedTarget(cache, `heart:${count}`, () =>
+      generateHeartTarget({ count, scale: 0.3, filled: true }),
+    );
   }
 
-  if (mode === 'image') {
-    if (!image) {
-      return createCloudTarget(count);
+  if (mode === 'image' || mode === 'draw') {
+    const rasterState = rasterSources[mode];
+    if (!rasterState || rasterState.status !== 'ready' || !rasterState.image) {
+      return cloudTarget;
     }
 
-    const key = 'image';
-    if (!cache.has(key)) {
-      const imageTarget = generateImageTarget({
-        image,
+    const cacheKey = `${mode}:${rasterState.cacheKey}:${count}`;
+    if (!cache.has(cacheKey)) {
+      const rasterTarget = generateRasterTarget({
+        image: rasterState.image,
         count,
         stride: 3,
         alphaThreshold: 20,
         worldScale: 8,
+        seed: mode === 'draw' ? 9101 : 9001,
       });
 
-      if (imageTarget) {
-        cache.set(key, imageTarget);
+      if (rasterTarget) {
+        cache.set(cacheKey, rasterTarget);
       } else {
-        return createCloudTarget(count);
+        return cloudTarget;
       }
     }
-    return cache.get(key);
+
+    return cache.get(cacheKey) || cloudTarget;
   }
 
-  return createCloudTarget(count);
+  return cloudTarget;
 }
 
-function ParticleSystem({ count, mode, text, theme, sim, swirlEnabled, particleHue, onFps, attractUntilRef }) {
+function morphToTarget({ data, target, count, morphStartRef }) {
+  if (!data || !target) {
+    return;
+  }
+
+  const { home, fromHome, toHome, perm } = data;
+  fromHome.set(home);
+
+  for (let i = 0; i < count; i += 1) {
+    const src = perm[i] * 3;
+    const dst = i * 3;
+    toHome[dst] = target[src];
+    toHome[dst + 1] = target[src + 1];
+    toHome[dst + 2] = target[src + 2];
+  }
+
+  morphStartRef.current = performance.now();
+}
+
+function ParticleSystem({
+  count,
+  mode,
+  text,
+  theme,
+  sim,
+  swirlEnabled,
+  particleHue,
+  imageSourceUrl,
+  imageTargetRevision,
+  drawSourceUrl,
+  drawRevision,
+  pointerForcesEnabled,
+  onFps,
+  attractUntilRef,
+}) {
   const pointsRef = useRef(null);
   const geometryRef = useRef(null);
 
   const dataRef = useRef(null);
   const targetCacheRef = useRef(new Map());
-  const imageRef = useRef(null);
-  const imageStatusRef = useRef('idle');
+  const rasterSourcesRef = useRef({
+    image: { image: null, status: 'idle', cacheKey: 'image:empty' },
+    draw: { image: null, status: 'idle', cacheKey: 'draw:empty' },
+  });
+  const baseColorRef = useRef([1, 1, 1]);
+  const countRef = useRef(count);
+  const targetParamsRef = useRef({ mode, text, imageTargetRevision, drawRevision });
 
   const morphStartRef = useRef(0);
   const morphDurationRef = useRef(0.8);
@@ -200,6 +238,18 @@ function ParticleSystem({ count, mode, text, theme, sim, swirlEnabled, particleH
   const geometry = useMemo(() => new THREE.BufferGeometry(), []);
 
   useEffect(() => {
+    baseColorRef.current = baseColor;
+  }, [baseColor]);
+
+  useEffect(() => {
+    countRef.current = count;
+  }, [count]);
+
+  useEffect(() => {
+    targetParamsRef.current = { mode, text, imageTargetRevision, drawRevision };
+  }, [mode, text, imageTargetRevision, drawRevision]);
+
+  useEffect(() => {
     geometryRef.current = geometry;
     return () => {
       geometry.dispose();
@@ -222,11 +272,11 @@ function ParticleSystem({ count, mode, text, theme, sim, swirlEnabled, particleH
 
     targetCacheRef.current = new Map();
     const initialTarget = resolveTargetForMode({
-      mode,
-      text,
+      mode: targetParamsRef.current.mode,
+      text: targetParamsRef.current.text,
       count,
       cache: targetCacheRef.current,
-      image: imageRef.current,
+      rasterSources: rasterSourcesRef.current,
     });
 
     if (previous && carryCount > 0) {
@@ -298,17 +348,17 @@ function ParticleSystem({ count, mode, text, theme, sim, swirlEnabled, particleH
       toHome[j + 1] = ty;
       toHome[j + 2] = tz;
 
-      colors[j] = baseColor[0];
-      colors[j + 1] = baseColor[1];
-      colors[j + 2] = baseColor[2];
+      colors[j] = baseColorRef.current[0];
+      colors[j + 1] = baseColorRef.current[1];
+      colors[j + 2] = baseColorRef.current[2];
     }
 
     if (!previous) {
       for (let i = 0; i < count; i += 1) {
         const j = i * 3;
-        colors[j] = baseColor[0];
-        colors[j + 1] = baseColor[1];
-        colors[j + 2] = baseColor[2];
+        colors[j] = baseColorRef.current[0];
+        colors[j + 1] = baseColorRef.current[1];
+        colors[j + 2] = baseColorRef.current[2];
       }
     }
 
@@ -319,73 +369,143 @@ function ParticleSystem({ count, mode, text, theme, sim, swirlEnabled, particleH
     morphStartRef.current = performance.now();
   }, [count, geometry]);
 
-  const resolveTarget = () => {
-    return resolveTargetForMode({
-      mode,
-      text,
-      count,
-      cache: targetCacheRef.current,
-      image: imageRef.current,
-    });
-  };
-
-  const applyMorphTarget = () => {
+  useEffect(() => {
     const data = dataRef.current;
     if (!data) {
       return;
     }
 
-    const target = resolveTarget();
-    if (!target) {
-      return;
-    }
-
-    const { home, fromHome, toHome, perm } = data;
-    fromHome.set(home);
-
-    for (let i = 0; i < count; i += 1) {
-      const src = perm[i] * 3;
-      const dst = i * 3;
-      toHome[dst] = target[src];
-      toHome[dst + 1] = target[src + 1];
-      toHome[dst + 2] = target[src + 2];
-    }
-
-    morphStartRef.current = performance.now();
-  };
+    const target = resolveTargetForMode({
+      mode,
+      text,
+      count,
+      cache: targetCacheRef.current,
+      rasterSources: rasterSourcesRef.current,
+    });
+    morphToTarget({ data, target, count, morphStartRef });
+  }, [mode, text, count, imageTargetRevision, drawRevision]);
 
   useEffect(() => {
-    if (mode !== 'image') {
-      applyMorphTarget();
-      return;
+    const rasterState = rasterSourcesRef.current.image;
+    rasterState.cacheKey = `${imageSourceUrl || 'empty'}:${imageTargetRevision}`;
+    rasterState.image = null;
+
+    if (!imageSourceUrl) {
+      rasterState.status = 'missing';
+      return undefined;
     }
 
-    if (imageStatusRef.current === 'ready') {
-      applyMorphTarget();
-      return;
-    }
-
-    if (imageStatusRef.current === 'loading') {
-      return;
-    }
-
-    imageStatusRef.current = 'loading';
+    let cancelled = false;
     const image = new Image();
+    rasterState.status = 'loading';
 
     image.onload = () => {
-      imageRef.current = image;
-      imageStatusRef.current = 'ready';
-      targetCacheRef.current.delete('image');
-      applyMorphTarget();
+      if (cancelled) {
+        return;
+      }
+
+      rasterState.image = image;
+      rasterState.status = 'ready';
+
+      if (targetParamsRef.current.mode === 'image' && dataRef.current) {
+        const target = resolveTargetForMode({
+          mode: 'image',
+          text: targetParamsRef.current.text,
+          count: countRef.current,
+          cache: targetCacheRef.current,
+          rasterSources: rasterSourcesRef.current,
+        });
+        morphToTarget({ data: dataRef.current, target, count: countRef.current, morphStartRef });
+      }
     };
 
     image.onerror = () => {
-      imageStatusRef.current = 'failed';
-      applyMorphTarget();
+      if (cancelled) {
+        return;
+      }
+
+      rasterState.image = null;
+      rasterState.status = 'failed';
+
+      if (targetParamsRef.current.mode === 'image' && dataRef.current) {
+        const target = resolveTargetForMode({
+          mode: 'image',
+          text: targetParamsRef.current.text,
+          count: countRef.current,
+          cache: targetCacheRef.current,
+          rasterSources: rasterSourcesRef.current,
+        });
+        morphToTarget({ data: dataRef.current, target, count: countRef.current, morphStartRef });
+      }
     };
 
-    image.src = '/silhouette.png';
-  }, [mode, text]);
+    image.src = imageSourceUrl;
+
+    return () => {
+      cancelled = true;
+    };
+  }, [imageSourceUrl, imageTargetRevision]);
+
+  useEffect(() => {
+    const rasterState = rasterSourcesRef.current.draw;
+    rasterState.cacheKey = `${drawSourceUrl || 'empty'}:${drawRevision}`;
+    rasterState.image = null;
+
+    if (!drawSourceUrl) {
+      rasterState.status = 'missing';
+      return undefined;
+    }
+
+    let cancelled = false;
+    const image = new Image();
+    rasterState.status = 'loading';
+
+    image.onload = () => {
+      if (cancelled) {
+        return;
+      }
+
+      rasterState.image = image;
+      rasterState.status = 'ready';
+
+      if (targetParamsRef.current.mode === 'draw' && dataRef.current) {
+        const target = resolveTargetForMode({
+          mode: 'draw',
+          text: targetParamsRef.current.text,
+          count: countRef.current,
+          cache: targetCacheRef.current,
+          rasterSources: rasterSourcesRef.current,
+        });
+        morphToTarget({ data: dataRef.current, target, count: countRef.current, morphStartRef });
+      }
+    };
+
+    image.onerror = () => {
+      if (cancelled) {
+        return;
+      }
+
+      rasterState.image = null;
+      rasterState.status = 'failed';
+
+      if (targetParamsRef.current.mode === 'draw' && dataRef.current) {
+        const target = resolveTargetForMode({
+          mode: 'draw',
+          text: targetParamsRef.current.text,
+          count: countRef.current,
+          cache: targetCacheRef.current,
+          rasterSources: rasterSourcesRef.current,
+        });
+        morphToTarget({ data: dataRef.current, target, count: countRef.current, morphStartRef });
+      }
+    };
+
+    image.src = drawSourceUrl;
+
+    return () => {
+      cancelled = true;
+    };
+  }, [drawSourceUrl, drawRevision]);
 
   useFrame((state, delta) => {
     const data = dataRef.current;
@@ -420,7 +540,7 @@ function ParticleSystem({ count, mode, text, theme, sim, swirlEnabled, particleH
 
     const mx = mouseWorldRef.current.x;
     const my = mouseWorldRef.current.y;
-    const hasMouse = mouseWorldRef.current.valid;
+    const hasMouse = pointerForcesEnabled && mouseWorldRef.current.valid;
 
     for (let i = 0; i < count; i += 1) {
       const j = i * 3;
@@ -507,7 +627,9 @@ function ParticleSystem({ count, mode, text, theme, sim, swirlEnabled, particleH
       material={material}
       frustumCulled={false}
       onPointerDown={() => {
-        attractUntilRef.current = performance.now() + 1000;
+        if (pointerForcesEnabled) {
+          attractUntilRef.current = performance.now() + 1000;
+        }
       }}
     />
   );
