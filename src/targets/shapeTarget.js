@@ -111,3 +111,102 @@ export function generateHeartTarget({
 
   return out;
 }
+
+export function generateSphereTarget({
+  count,
+  radius = 4.2,
+  jitter = 0.015,
+}) {
+  const out = new Float32Array(count * 3);
+  const rng = createRng(3333 + count);
+  const tau = Math.PI * 2;
+
+  for (let i = 0; i < count; i += 1) {
+    const theta = rng() * tau;
+    const phi = Math.acos(rng() * 2 - 1);
+    const r = radius * Math.cbrt(rng());
+    const sinPhi = Math.sin(phi);
+    const j = i * 3;
+
+    out[j] = Math.cos(theta) * sinPhi * r + (rng() - 0.5) * jitter;
+    out[j + 1] = Math.cos(phi) * r + (rng() - 0.5) * jitter;
+    out[j + 2] = Math.sin(theta) * sinPhi * r + (rng() - 0.5) * jitter;
+  }
+
+  return out;
+}
+
+export function generateCubeTarget({
+  count,
+  size = 7,
+  jitter = 0.015,
+}) {
+  const out = new Float32Array(count * 3);
+  const rng = createRng(4444 + count);
+  const halfSize = size * 0.5;
+
+  for (let i = 0; i < count; i += 1) {
+    const j = i * 3;
+    out[j] = (rng() * 2 - 1) * halfSize + (rng() - 0.5) * jitter;
+    out[j + 1] = (rng() * 2 - 1) * halfSize + (rng() - 0.5) * jitter;
+    out[j + 2] = (rng() * 2 - 1) * halfSize + (rng() - 0.5) * jitter;
+  }
+
+  return out;
+}
+
+export function generateHelixTarget({
+  count,
+  radius = 2.8,
+  height = 8.5,
+  turns = 4.25,
+  thickness = 0.5,
+  jitter = 0.012,
+}) {
+  const out = new Float32Array(count * 3);
+  const rng = createRng(5555 + count);
+  const tau = Math.PI * 2;
+  const totalAngle = turns * tau;
+
+  for (let i = 0; i < count; i += 1) {
+    const t = rng() * totalAngle;
+    const localAngle = rng() * tau;
+    const tubeRadius = Math.sqrt(rng()) * thickness;
+    const radialOffset = Math.cos(localAngle) * tubeRadius;
+    const verticalOffset = Math.sin(localAngle) * tubeRadius;
+    const helixRadius = radius + radialOffset;
+    const y = (t / totalAngle - 0.5) * height;
+    const j = i * 3;
+
+    out[j] = Math.cos(t) * helixRadius + (rng() - 0.5) * jitter;
+    out[j + 1] = y + verticalOffset + (rng() - 0.5) * jitter;
+    out[j + 2] = Math.sin(t) * helixRadius + (rng() - 0.5) * jitter;
+  }
+
+  return out;
+}
+
+export function generateTorusTarget({
+  count,
+  majorRadius = 3.2,
+  tubeRadius = 1.15,
+  jitter = 0.012,
+}) {
+  const out = new Float32Array(count * 3);
+  const rng = createRng(6666 + count);
+  const tau = Math.PI * 2;
+
+  for (let i = 0; i < count; i += 1) {
+    const u = rng() * tau;
+    const v = rng() * tau;
+    const tube = Math.sqrt(rng()) * tubeRadius;
+    const ring = majorRadius + Math.cos(v) * tube;
+    const j = i * 3;
+
+    out[j] = Math.cos(u) * ring + (rng() - 0.5) * jitter;
+    out[j + 1] = Math.sin(v) * tube + (rng() - 0.5) * jitter;
+    out[j + 2] = Math.sin(u) * ring + (rng() - 0.5) * jitter;
+  }
+
+  return out;
+}

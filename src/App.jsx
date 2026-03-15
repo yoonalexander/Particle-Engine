@@ -1,7 +1,30 @@
 import { useEffect, useRef, useState } from 'react';
 import ParticleScene from './ParticleScene';
 
-const MODES = ['cloud', 'text', 'circle', 'heart', 'image', 'draw'];
+const MODE_OPTIONS = {
+  '2d': ['cloud', 'text', 'circle', 'heart', 'image', 'draw'],
+  '3d': ['cloud', 'sphere', 'cube', 'helix', 'torus'],
+};
+const DEFAULT_MODES = {
+  '2d': 'cloud',
+  '3d': 'cloud',
+};
+const DIMENSION_LABELS = {
+  '2d': '2D',
+  '3d': '3D',
+};
+const MODE_LABELS = {
+  cloud: 'Cloud',
+  text: 'Text',
+  circle: 'Circle',
+  heart: 'Heart',
+  image: 'Image',
+  draw: 'Draw',
+  sphere: 'Sphere',
+  cube: 'Cube',
+  helix: 'Helix',
+  torus: 'Torus',
+};
 const SAMPLE_IMAGE_URL = '/silhouette.svg';
 const MIN_PARTICLES = 5000;
 const MAX_PARTICLES = 30000;
@@ -14,6 +37,10 @@ function clamp(value, min, max) {
 
 function hueToHex(hue) {
   return `hsl(${Math.round(hue)} 95% 62%)`;
+}
+
+function formatModeLabel(mode) {
+  return MODE_LABELS[mode] || mode;
 }
 
 function getDrawPoint(event, canvas) {
@@ -230,7 +257,8 @@ function DrawPad({ brushSize, isErasing, clearSignal, onCommit, onInteractionCha
 
 export default function App() {
   const [count, setCount] = useState(12000);
-  const [mode, setMode] = useState('cloud');
+  const [dimension, setDimension] = useState('2d');
+  const [selectedModes, setSelectedModes] = useState(() => ({ ...DEFAULT_MODES }));
   const [text, setText] = useState('CRAVEAI');
   const [fps, setFps] = useState(0);
   const [swirlEnabled, setSwirlEnabled] = useState(false);
@@ -259,6 +287,24 @@ export default function App() {
   const attractUntilRef = useRef(0);
   const uploadUrlRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  const mode = selectedModes[dimension];
+  const visibleModes = MODE_OPTIONS[dimension];
+
+  const setModeForDimension = (targetDimension, nextMode) => {
+    if (!MODE_OPTIONS[targetDimension]?.includes(nextMode)) {
+      return;
+    }
+
+    setSelectedModes((current) => ({
+      ...current,
+      [targetDimension]: nextMode,
+    }));
+  };
+
+  const activateMode = (nextMode) => {
+    setModeForDimension(dimension, nextMode);
+  };
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -292,9 +338,9 @@ export default function App() {
 
       if (event.key >= '1' && event.key <= '6') {
         const index = Number(event.key) - 1;
-        const nextMode = MODES[index];
+        const nextMode = MODE_OPTIONS[dimension][index];
         if (nextMode) {
-          setMode(nextMode);
+          setModeForDimension(dimension, nextMode);
         }
         return;
       }
@@ -331,7 +377,7 @@ export default function App() {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [dimension]);
 
   const setSimValue = (key) => (event) => {
     const value = Number(event.target.value);
@@ -354,7 +400,8 @@ export default function App() {
     setImageSourceKind('sample');
     setImageSourceUrl(SAMPLE_IMAGE_URL);
     setImageRevision((value) => value + 1);
-    setMode('image');
+    setDimension('2d');
+    setModeForDimension('2d', 'image');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -375,7 +422,8 @@ export default function App() {
     setImageSourceKind('upload');
     setImageSourceUrl(nextUrl);
     setImageRevision((value) => value + 1);
-    setMode('image');
+    setDimension('2d');
+    setModeForDimension('2d', 'image');
   };
 
   const handleDrawCommit = (nextUrl, hasInk) => {
@@ -405,6 +453,7 @@ export default function App() {
     <div className="app-shell">
       <ParticleScene
         count={count}
+        dimension={dimension}
         mode={mode}
         text={text}
         theme={theme}
@@ -428,8 +477,12 @@ export default function App() {
             <strong>{fps.toFixed(1)}</strong>
           </div>
           <div className="hud-row">
+            <span>Dimension</span>
+            <strong>{DIMENSION_LABELS[dimension]}</strong>
+          </div>
+          <div className="hud-row">
             <span>Mode</span>
-            <strong>{mode}</strong>
+            <strong>{formatModeLabel(mode)}</strong>
           </div>
 
           <div className="hud-row split">
@@ -441,14 +494,26 @@ export default function App() {
             </button>
           </div>
 
-          <div className="hud-buttons">
-            <button type="button" onClick={() => setMode('cloud')}>1 Cloud</button>
-            <button type="button" onClick={() => setMode('text')}>2 Text</button>
-            <button type="button" onClick={() => setMode('circle')}>3 Circle</button>
-            <button type="button" onClick={() => setMode('heart')}>4 Heart</button>
-            <button type="button" onClick={() => setMode('image')}>5 Image</button>
-            <button type="button" onClick={() => setMode('draw')}>6 Draw</button>
+          <div className="hud-row split">
+            <button type="button" onClick={() => setDimension('2d')} disabled={dimension === '2d'}>
+              2D
+            </button>
+            <button type="button" onClick={() => setDimension('3d')} disabled={dimension === '3d'}>
+              3D
+            </button>
           </div>
+
+          <div className="hud-buttons">
+            {visibleModes.map((modeName, index) => (
+              <button key={modeName} type="button" onClick={() => activateMode(modeName)}>
+                {index + 1} {formatModeLabel(modeName)}
+              </button>
+            ))}
+          </div>
+
+          {dimension === '3d' && (
+            <p className="hint">3D mode now supports camera orbit with WASD or the arrow keys, and outer particles are surface-tinted to make the shape read more clearly.</p>
+          )}
 
           <label className="hud-field">
             <span>Particle Count: {count}</span>
@@ -482,33 +547,37 @@ export default function App() {
             />
           </label>
 
-          <label className="hud-field">
-            <span>Text</span>
-            <input value={text} onChange={(event) => setText(event.target.value.toUpperCase())} maxLength={14} />
-          </label>
-
-          <div className="hud-panel">
-            <div className="hud-row compact">
-              <span>Image Source</span>
-              <strong>{imageSourceLabel}</strong>
-            </div>
-            <label className="hud-field file-field">
-              <span>Upload PNG, JPG, or WebP</span>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/png,image/jpeg,image/webp,image/svg+xml"
-                onChange={handleImageUpload}
-              />
+          {dimension === '2d' && (
+            <label className="hud-field">
+              <span>Text</span>
+              <input value={text} onChange={(event) => setText(event.target.value.toUpperCase())} maxLength={14} />
             </label>
-            <div className="hud-row split">
-              <button type="button" onClick={handleUseSampleImage}>Use Sample</button>
-              <button type="button" onClick={clearUploadedImage} disabled={imageSourceKind !== 'upload'}>
-                Clear Upload
-              </button>
+          )}
+
+          {dimension === '2d' && (
+            <div className="hud-panel">
+              <div className="hud-row compact">
+                <span>Image Source</span>
+                <strong>{imageSourceLabel}</strong>
+              </div>
+              <label className="hud-field file-field">
+                <span>Upload PNG, JPG, or WebP</span>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                  onChange={handleImageUpload}
+                />
+              </label>
+              <div className="hud-row split">
+                <button type="button" onClick={handleUseSampleImage}>Use Sample</button>
+                <button type="button" onClick={clearUploadedImage} disabled={imageSourceKind !== 'upload'}>
+                  Clear Upload
+                </button>
+              </div>
+              <p className="hint source-status">{imageStatusText}</p>
             </div>
-            <p className="hint source-status">{imageStatusText}</p>
-          </div>
+          )}
 
           <label className="hud-field">
             <span>Spring: {sim.spring.toFixed(2)}</span>
@@ -530,7 +599,7 @@ export default function App() {
             <input type="range" min="1" max="60" step="0.5" value={sim.mouseForce} onChange={setSimValue('mouseForce')} />
           </label>
 
-          {mode === 'draw' && (
+          {dimension === '2d' && mode === 'draw' && (
             <div className="hud-panel draw-pad-shell">
               <div className="hud-row compact">
                 <span>Draw Target</span>
@@ -583,7 +652,7 @@ export default function App() {
             </button>
           </div>
 
-          <p className="hint">Hotkeys: 1-6 modes, +/- count, [ ] radius.</p>
+          <p className="hint">Hotkeys: 1-6 visible modes, +/- count, [ ] radius. In 3D, use WASD or arrow keys to orbit the camera.</p>
           <div className="hint">
             <strong>TODO</strong>
             <br />
@@ -591,7 +660,7 @@ export default function App() {
             <br />
             2. Explore making this a portfolio background app.
           </div>
-          {sampleImageStatus === 'missing' && (
+          {dimension === '2d' && sampleImageStatus === 'missing' && (
             <p className="hint"><code>/public/silhouette.svg</code> missing. Upload an image to use image mode.</p>
           )}
         </div>
@@ -609,4 +678,3 @@ export default function App() {
     </div>
   );
 }
-
