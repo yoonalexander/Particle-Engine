@@ -1,0 +1,16 @@
+{
+  "rewrites": [
+    {
+      "source": "/particle-engine/assets/:path*",
+      "destination": "/assets/:path*"
+    },
+    {
+      "source": "/particle-engine/:path*",
+      "destination": "/:path*"
+    },
+    {
+      "source": "/particle-engine",
+      "destination": "/"
+    }
+  ]
+}

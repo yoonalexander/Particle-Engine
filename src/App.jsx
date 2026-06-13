@@ -25,7 +25,7 @@ const MODE_LABELS = {
   helix: 'Helix',
   torus: 'Torus',
 };
-const SAMPLE_IMAGE_URL = '/silhouette.svg';
+const SAMPLE_IMAGE_URL = `${import.meta.env.BASE_URL}silhouette.svg`;
 const MIN_PARTICLES = 5000;
 const MAX_PARTICLES = 30000;
 const DRAW_PAD_WIDTH = 296;
